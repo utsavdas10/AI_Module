@@ -1,0 +1,30 @@
+
+# AI & LLM Integration
+openai
+anthropic
+groq
+google-generativeai
+langgraph
+
+# Database Drivers & ORM
+sqlalchemy
+psycopg2-binary  # For PostgreSQL
+mysql-connector-python  # For MySQL
+pymongo
+motor # <-- Add this line for async MongoDB operations
+sqlalchemy[asyncio]
+asyncpg
+aiomysql
+pandas
+
+
+# Security & Config
+pydantic
+pydantic-settings
+
+# Utilities
+python-dotenv
+pytest-asyncio
+pytest
+
+
