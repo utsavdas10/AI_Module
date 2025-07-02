@@ -7,8 +7,6 @@ from app.prompts.analysis_prompt import get_analysis_prompt
 from app.utils.LLM_configuration import LLMConfig
 from app.utils.exceptions import LLMNotConfiguredError
 
-# Gemini Client
-# import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +40,7 @@ class InsightGenerator:
                 logger.error("LLM needs to be configured")
                 raise LLMNotConfiguredError("LLM needs to be configured")
             response = model.generate_response(prompt)
+            return response
 
         except Exception as e:
             return f"The query to support your analysis returned {num_rows} result(s). A detailed analysis could not be generated at this time."

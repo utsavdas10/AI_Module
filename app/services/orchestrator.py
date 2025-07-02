@@ -18,9 +18,9 @@ from app.utils.LLM_configuration import LLMConfig
 from app.db.db_connector import get_db_connection
 from app.core.config import settings
 
-from langgraph.graph import StateGraph, END # type: ignore
-from langgraph.graph.message import add_messages # type: ignore
-import google.generativeai as genai # type: ignore
+from langgraph.graph import StateGraph, END
+from langgraph.graph.message import add_messages
+
 
 logger = logging.getLogger(__name__)
 
@@ -329,27 +329,35 @@ async def join_data_node(state: MultiDBQueryState) -> Dict[str, Any]:
         logger.info(f"join_data_node took {elapsed:.2f} ms")
 
 
+
+
 # This node processes the result for a 'query' intent, including data, summary, and visualization.
 async def process_query_result_node(state: MultiDBQueryState) -> Dict[str, Any]:
     start_time = time.time()
     final_data = state["final_data"]
     question = state["request"].question
-    logger.info(f"Generating summarya and final data for query type  question...")
+    logger.info(f"Generating summary and final data for query type  question...")
     try:
         llm = state.get("llm")
         if not llm: raise LLMNotConfiguredError("LLM needs to be configured")
+
         summary_service = SummaryGenerator()
         summary = await summary_service.analyze(llm, question, final_data)
+
         summary_data_len = len(summary["detailed_analysis"]["data"])
         logger.info(f"{summary_data_len} Final Table(s) created")
+
         analysis = summary["detailed_analysis"]["analysis"]
         visualization = summary["detailed_analysis"]["visualization_hint"]
         table_desc = summary["detailed_analysis"]["table_desc"]
+
         for data in summary["detailed_analysis"]["data"]:
             final_data.append(data)
+
         state["final_data"] = final_data
         final_data_len = len(state["final_data"])
         logger.info(f"{final_data_len} Data Instances Ready")
+
         final_response = FinalResponse(
             success=True,
             response_type="query_result",
@@ -359,14 +367,19 @@ async def process_query_result_node(state: MultiDBQueryState) -> Dict[str, Any]:
             data=state["final_data"],
             table_desc = table_desc
         )
+
         logger.info(f"Analysis generated successfully.")
         return {"final_response": final_response}
+    
     except Exception as e:
         logger.error(f"Failed to generate analysis: {e}")
         raise AnalysisError(str(e))
+    
     finally:
         elapsed = (time.time() - start_time) * 1000
         logger.info(f"process_query_result_node took {elapsed:.2f} ms")
+
+
 
 
 # This node synthesizes a final text answer for an 'analysis' intent using the fetched data.
@@ -378,18 +391,24 @@ async def process_analysis_result_node(state: MultiDBQueryState) -> Dict[str, An
     try:
         llm = state.get("llm")
         if not llm: raise LLMNotConfiguredError("LLM needs to be configured")
+
         insight_service = InsightGenerator()
         insights = await insight_service.analyze(llm, question, final_data)
+
         insights_data_len = len(insights["detailed_analysis"]["data"])
         logger.info(f"{insights_data_len} Final Table(s) created")
+
         analysis = insights["detailed_analysis"]["analysis"]
         visualization = insights["detailed_analysis"]["visualization_hint"]
         table_desc = insights["detailed_analysis"]["table_desc"]
+
         for data in insights["detailed_analysis"]["data"]:
             final_data.append(data)
+
         state["final_data"] = final_data
         final_data_len = len(state["final_data"])
         logger.info(f"{final_data_len} Data Instances Ready")
+
         final_response = FinalResponse(
             success=True,
             response_type="analysis_result",
@@ -399,14 +418,20 @@ async def process_analysis_result_node(state: MultiDBQueryState) -> Dict[str, An
             data=state["final_data"],
             table_desc = table_desc
         )
+
         logger.info(f"Analysis generated successfully.")
         return {"final_response": final_response}
+    
     except Exception as e:
         logger.error(f"Failed to generate analysis: {e}")
         raise AnalysisError(str(e))
     finally:
+
         elapsed = (time.time() - start_time) * 1000
         logger.info(f"process_analysis_result_node took {elapsed:.2f} ms")
+
+
+
 
 ### 3. Define Conditional Edges
 
@@ -486,7 +511,7 @@ async def process_natural_language_query(
     request: NLQueryRequest
 ) -> FinalResponse:
     
-    model_provider = request["model_provider"] if "model_provider" in request else settings.DEFAULT_MODEL_PROVIDER
+    model_provider = request["model_provider"] if "model_provider" in request else 'gemini'
     chat_history = request["chat_history"] if "chat_history" in request else []
     llm = LLMConfig(model_provider, chat_history)
 

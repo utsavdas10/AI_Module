@@ -26,5 +26,6 @@ pydantic-settings
 python-dotenv
 pytest-asyncio
 pytest
+colorlog
 
 

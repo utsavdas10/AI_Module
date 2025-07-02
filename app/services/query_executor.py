@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 
-
 class SafeQueryExecutor:
 
     PROHIBITED_SQL_KEYWORDS = {
