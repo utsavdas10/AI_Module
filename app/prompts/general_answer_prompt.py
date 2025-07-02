@@ -49,9 +49,23 @@ Chat History: [{{"role": "assistant", "content": "Here is the sales table...", "
 Response:
 {{
   "analysis": "Here is a visualization of the 'Sales Data' table provided earlier. The bar chart below highlights the sales trend by month...",
-  "data": [...(data)],
+  "data": [
+    {{
+      "table_name": "Sales Data",
+      "columns": [
+        {{ "name": "genre", "type": "string" }},
+        {{ "name": "total_sales", "type": "float" }}
+      ],
+      "rows": [
+        {{ "genre": "Historical Fiction", "total_sales": 572.06 }},
+        {{ "genre": "Horror", "total_sales": 564.76 }},
+        {{ "genre": "Mystery", "total_sales": 558.17 }}
+      ],
+      "row_count": 9
+    }}
+  ],
   "visualization_hint": {{"Sales Data": "Bar Chart"}},
-  "table_desc": {{"Sales Data": "A table showing sales by month"}}
+  "table_desc": {{"Sales Data": "A table showing sales by genre"}}
 }}
 
 
@@ -74,7 +88,22 @@ Chat History: [
 Response:
 {{
   "analysis": "Based on your recent purchases, you have shown interest in both books and electronics. If you are looking to expand your reading, consider exploring new releases in your favorite genres. Alternatively, since you recently bought headphones, you might enjoy related tech accessories or audiobooks.\n\n**Recommendation:** Check out the latest bestsellers in books or consider a portable speaker to complement your headphones.",
-  "data": [...(data)],
+  "data": [
+    {{
+      "table_name": "Purchase History",
+      "columns": [
+        {{ "name": "item", "type": "string" }},
+        {{ "name": "category", "type": "string" }},
+        {{ "name": "amount", "type": "float" }},
+        {{ "name": "date", "type": "string" }}
+      ],
+      "rows": [
+        {{ "item": "Book A", "category": "Books", "amount": 20, "date": "2025-06-01" }},
+        {{ "item": "Headphones", "category": "Electronics", "amount": 100, "date": "2025-06-10" }}
+      ],
+      "row_count": 2
+    }}
+  ],
   "visualization_hint": {{"Purchase History": "Bar Chart"}},
   "table_desc": {{"Purchase History": "A table showing your recent purchases by category"}}
 }}
