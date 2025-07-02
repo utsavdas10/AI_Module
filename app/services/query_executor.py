@@ -8,6 +8,11 @@ from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.utils.exceptions import SecurityError, QueryExecutionError
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 
 
 class SafeQueryExecutor:
@@ -27,11 +32,13 @@ class SafeQueryExecutor:
 
         if self.db_type in ['postgresql', 'mysql']:
             if not self._is_sql_safe(query):
+                logger.error(f"SQL query contains prohibited or dangerous keywords: {query}")
                 raise SecurityError("SQL query contains prohibited or dangerous keywords.")
             result_data = await self._execute_sql(query)
         elif self.db_type == 'mongodb':
             result_data = await self._execute_mongo(query, query_type)
         else:
+            logger.error(f"Unsupported database type for execution: {self.db_type}")
             raise ValueError(f"Unsupported database type for execution: {self.db_type}")
 
         return result_data
@@ -57,6 +64,7 @@ class SafeQueryExecutor:
                 
                 return {"columns": columns, "rows": rows, "row_count": len(rows)}
         except Exception as e:
+            logger.error(f"SQL query execution failed: {e}")
             raise QueryExecutionError(self.db_id, f"SQL query execution failed: {e}")
 
 

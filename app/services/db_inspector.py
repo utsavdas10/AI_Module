@@ -4,6 +4,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 from pymongo.database import Database as MongoDatabase
 
+
 logger = logging.getLogger(__name__)
 
 class DatabaseInspector:
@@ -12,11 +13,16 @@ class DatabaseInspector:
         self.db_type = db_type
 
     async def get_schema_representation(self) -> dict:
-        if self.db_type in ['postgresql', 'mysql']:
-            return await self._get_sql_schema()
-        elif self.db_type == 'mongodb':
-            return await self._get_mongo_schema()
-        else:
+        try:
+            if self.db_type in ['postgresql', 'mysql']:
+                return await self._get_sql_schema()
+            elif self.db_type == 'mongodb':
+                return await self._get_mongo_schema()
+            else:
+                logger.error(f"Unsupported database type for inspection: {self.db_type}")
+                raise ValueError(f"Unsupported database type for inspection: {self.db_type}")
+        except Exception as e:
+            logger.error(f"Error inspecting database schema for {self.db_type}: {e}")
             raise ValueError(f"Unsupported database type for inspection: {self.db_type}")
 
     async def _get_sql_schema(self) -> dict:

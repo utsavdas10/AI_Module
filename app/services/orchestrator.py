@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import json
+import time
 from typing import TypedDict, Annotated, List, Dict, Any, Literal
 
 from app.models.query import NLQueryRequest, FinalResponse
@@ -10,8 +11,10 @@ from app.services.query_executor import SafeQueryExecutor
 from app.services.summary_generator import SummaryGenerator
 from app.services.insight_generator import InsightGenerator
 from app.services.data_joiner import DataJoiner
-from app.utils.exceptions import ConnectionError, SchemaError, IntentClassificationError, GeneralAnswerError, QueryGenerationError, QueryExecutionError, JoinError, AnalysisError, LLMNotConfiguredError
 from app.services.classify_user_intent import classify_user_intent
+from app.services.general_answer import generate_general_llm_response
+from app.utils.exceptions import ConnectionError, SchemaError, IntentClassificationError, GeneralAnswerError, QueryGenerationError, QueryExecutionError, JoinError, AnalysisError, LLMNotConfiguredError
+from app.utils.LLM_configuration import LLMConfig
 from app.db.db_connector import get_db_connection
 from app.core.config import settings
 
@@ -22,19 +25,6 @@ import google.generativeai as genai # type: ignore
 logger = logging.getLogger(__name__)
 
 
-# TODO -> Fresh seperate class handling different LLMs as per user
-
-# Configure a shared LLM client for graph nodes
-def configure_gemini_llm():
-    try:
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        return genai.GenerativeModel('gemini-2.0-flash')
-    except Exception as e:
-        logger.error(f"Failed to configure Gemini client: {e}")
-        raise LLMNotConfiguredError("LLM needs to be configured")
-def get_llm():
-    return configure_gemini_llm()
-
 
 # 1. Define the new Graph State
 class MultiDBQueryState(TypedDict):
@@ -44,6 +34,8 @@ class MultiDBQueryState(TypedDict):
     # Global state
     db_connections: Dict[str, Any]
     db_schemas: Dict[str, Dict[str, Any]]
+    llm: LLMConfig
+
     error: Annotated[List[str], add_messages]
 
     # Classification
@@ -69,6 +61,7 @@ class MultiDBQueryState(TypedDict):
 
 # This node establishes connections to all databases specified in the request.
 async def get_all_db_connections_node(state: MultiDBQueryState) -> Dict[str, Any]:
+    start_time = time.time()
     connections = {}
     for params in state["request"].connections:
         try:
@@ -82,15 +75,16 @@ async def get_all_db_connections_node(state: MultiDBQueryState) -> Dict[str, Any
     try:
         logger.info(f"Successfully established {len(connections)} DB connections.")
         return {"db_connections": connections}
-    except Exception as e:
-        logger.error(f"Failed to connect to DB {params.id}: {e}")
-        raise ConnectionError(params.id, str(e))
+    finally:
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"get_all_db_connections_node took {elapsed:.2f} ms")
 
 
 
 
 # This node retrieves schema information from all connected databases.
 async def get_all_schemas_node(state: MultiDBQueryState) -> Dict[str, Any]:
+    start_time = time.time()
     schemas, connections = {}, state["db_connections"]
     all_params = {p.id: p for p in state["request"].connections}
 
@@ -103,22 +97,21 @@ async def get_all_schemas_node(state: MultiDBQueryState) -> Dict[str, Any]:
             schemas[db_id] = {"db_type": params.db_type, **schema_repr}
 
         except Exception as e:
+            logger.error(f'Error fetching schema for db_id: {db_id}')
             raise SchemaError(db_id, str(e))
-    
     try:
         logger.info(f"Successfully inspected {len(schemas)} schemas.")
         return {"db_schemas": schemas}
-    except Exception as e:
-        raise SchemaError(db_id, str(e))
-    
-
-
+    finally:
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"get_all_schemas_node took {elapsed:.2f} ms")
 
 
 
 
 # This node classifies the question into 'query' or 'analysis' intent and selects the target database.
 async def classify_question_node(state: MultiDBQueryState) -> Dict[str, Any]:
+    start_time = time.time()
     question = state["request"].question
     # Sanitize schema for the prompt to avoid overwhelming the LLM
     schemas_for_prompt = {
@@ -136,14 +129,13 @@ async def classify_question_node(state: MultiDBQueryState) -> Dict[str, Any]:
 
     logger.info(f"Classifying question intent (query vs analysis vs general...)")
 
-    llm = get_llm()
+    llm = state.get("llm")
     if not llm: raise LLMNotConfiguredError("LLM needs to be configured")
-    
     try:
         classification = await classify_user_intent(llm, schemas_str, question, state)
         if "error" in classification:
-            logger.info(f"Classification error: {classification['error']}")
-            return {"error": classification["error"]}
+            logger.error(f"Classification error: {classification['error']}")
+            raise IntentClassificationError(str(classification["error"]))
         
         intent = classification["question_type"]
         target_db_ids = classification["target_db_ids"]
@@ -163,31 +155,37 @@ async def classify_question_node(state: MultiDBQueryState) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Failed to classify question: {e}")
         raise IntentClassificationError(str(e))
-    
-    
+    finally:
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"classify_question_node took {elapsed:.2f} ms")
+
+
 
 
 # This node generates a general answer without needing database context.
 async def general_answer_node(state: MultiDBQueryState) -> Dict[str, Any]:
+    start_time = time.time()
     question = state["request"].question
     logger.info(f"Generating general answer.")
     
-    llm = get_llm()
+    llm = state.get("llm")
     if not llm: raise LLMNotConfiguredError("LLM needs to be configured")
     
     try:
-        response = await llm.generate_content_async(f"Provide a direct, conversational answer to the following question, refer to the chat history before you answer: {question}")
-        final_response = FinalResponse(success=True, response_type="general_answer", analysis=response.text)
+        response = await generate_general_llm_response(llm, question)
+        final_response = FinalResponse(success=True, response_type="general_answer", analysis=response)
         return {"final_response": final_response}
     except Exception as e:
         logger.error(f"Failed to generate general answer: {e}")
         raise GeneralAnswerError(str(e))
-
-
+    finally:
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"general_answer_node took {elapsed:.2f} ms")
 
 
 # This node generates a query based on the classified intent and the target database.
 async def generate_query_node(state: MultiDBQueryState) -> Dict[str, Any]:
+    start_time = time.time()
     question = state["request"].question
     intent = state["question_type"]
     db_ids = state["target_db_ids"]
@@ -204,7 +202,7 @@ async def generate_query_node(state: MultiDBQueryState) -> Dict[str, Any]:
             raise QueryGenerationError(str(error))
 
     # 2. Call the new planner method
-    llm = get_llm()
+    llm = state.get("llm")
     if not llm: raise LLMNotConfiguredError("LLM needs to be configured")
     try:
         query_gen = QueryGenerator()
@@ -214,26 +212,25 @@ async def generate_query_node(state: MultiDBQueryState) -> Dict[str, Any]:
             schemas_for_planning=schemas_to_plan,
             question=question
         )
-
-        # The result is already in the desired format, just pass it through
         logger.info(f"Query plan generation complete.")
         return {"generated_query_plan": generated_plan}
-    
     except Exception as e:
+        logger.error(f"Query plan generation failed: {e}")
         raise QueryGenerationError(str(e))
-
-    
+    finally:
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"generate_query_node took {elapsed:.2f} ms")
 
 
 
 
 # This node executes the generated query on the target database.
 async def execute_query_node(state: MultiDBQueryState) -> Dict[str, Any]:
+    start_time = time.time()
     query_plan = state.get("generated_query_plan")
     if not query_plan or not query_plan.get("queries"):
         logger.info(f"No queries to execute in the plan.")
         return {"execution_results": {}}
-
     logger.info(f"Starting execution of {len(query_plan['queries'])} queries from the plan...")
 
     # A list to hold the results from all executions, keyed by db_id.
@@ -282,10 +279,12 @@ async def execute_query_node(state: MultiDBQueryState) -> Dict[str, Any]:
 
         logger.info(f"All queries executed successfully.")
         return {"execution_results": all_results}
-
     except Exception as e:
         logger.error(f"Query execution failed on DB '{db_id}': {e}")
         raise QueryExecutionError(db_id, str(e))
+    finally:
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"execute_query_node took {elapsed:.2f} ms")
 
 
 # This helper coroutine executes a single query and returns a structured result.
@@ -305,6 +304,7 @@ async def _execute_single_query(db_id: str, db_type: str, db_conn: Any, query: A
 
 # Node to perform join operations
 async def join_data_node(state: MultiDBQueryState) -> Dict[str, Any]:
+    start_time = time.time()
     logger.info(f"Assembling final data tables from execution results...")
 
     execution_results = state.get("execution_results", [])
@@ -324,38 +324,32 @@ async def join_data_node(state: MultiDBQueryState) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"An error occurred during data joining: {e}", exc_info=True)
         raise JoinError(str(e))
-
-
-
+    finally:
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"join_data_node took {elapsed:.2f} ms")
 
 
 # This node processes the result for a 'query' intent, including data, summary, and visualization.
 async def process_query_result_node(state: MultiDBQueryState) -> Dict[str, Any]:
+    start_time = time.time()
     final_data = state["final_data"]
     question = state["request"].question
     logger.info(f"Generating summarya and final data for query type  question...")
-
     try:
-        llm = get_llm()
+        llm = state.get("llm")
         if not llm: raise LLMNotConfiguredError("LLM needs to be configured")
         summary_service = SummaryGenerator()
         summary = await summary_service.analyze(llm, question, final_data)
-
         summary_data_len = len(summary["detailed_analysis"]["data"])
         logger.info(f"{summary_data_len} Final Table(s) created")
-
         analysis = summary["detailed_analysis"]["analysis"]
         visualization = summary["detailed_analysis"]["visualization_hint"]
         table_desc = summary["detailed_analysis"]["table_desc"]
-
         for data in summary["detailed_analysis"]["data"]:
             final_data.append(data)
         state["final_data"] = final_data
-
         final_data_len = len(state["final_data"])
-
         logger.info(f"{final_data_len} Data Instances Ready")
-
         final_response = FinalResponse(
             success=True,
             response_type="query_result",
@@ -365,48 +359,37 @@ async def process_query_result_node(state: MultiDBQueryState) -> Dict[str, Any]:
             data=state["final_data"],
             table_desc = table_desc
         )
-
         logger.info(f"Analysis generated successfully.")
         return {"final_response": final_response}
-    
     except Exception as e:
         logger.error(f"Failed to generate analysis: {e}")
         raise AnalysisError(str(e))
-
-    
-
-
-
+    finally:
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"process_query_result_node took {elapsed:.2f} ms")
 
 
 # This node synthesizes a final text answer for an 'analysis' intent using the fetched data.
 async def process_analysis_result_node(state: MultiDBQueryState) -> Dict[str, Any]:
-
+    start_time = time.time()
     final_data = state["final_data"]
     question = state["request"].question
     logger.info(f"Generating detailed analysis for high-level question...")
-
     try:
-        llm = get_llm()
+        llm = state.get("llm")
         if not llm: raise LLMNotConfiguredError("LLM needs to be configured")
         insight_service = InsightGenerator()
         insights = await insight_service.analyze(llm, question, final_data)
-
         insights_data_len = len(insights["detailed_analysis"]["data"])
         logger.info(f"{insights_data_len} Final Table(s) created")
-
         analysis = insights["detailed_analysis"]["analysis"]
         visualization = insights["detailed_analysis"]["visualization_hint"]
         table_desc = insights["detailed_analysis"]["table_desc"]
-
         for data in insights["detailed_analysis"]["data"]:
             final_data.append(data)
         state["final_data"] = final_data
-
         final_data_len = len(state["final_data"])
-
         logger.info(f"{final_data_len} Data Instances Ready")
-
         final_response = FinalResponse(
             success=True,
             response_type="analysis_result",
@@ -416,16 +399,14 @@ async def process_analysis_result_node(state: MultiDBQueryState) -> Dict[str, An
             data=state["final_data"],
             table_desc = table_desc
         )
-
         logger.info(f"Analysis generated successfully.")
         return {"final_response": final_response}
-    
     except Exception as e:
         logger.error(f"Failed to generate analysis: {e}")
         raise AnalysisError(str(e))
-
-
-
+    finally:
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"process_analysis_result_node took {elapsed:.2f} ms")
 
 ### 3. Define Conditional Edges
 
@@ -504,11 +485,17 @@ multi_db_query_app = create_multi_db_query_graph()
 async def process_natural_language_query(
     request: NLQueryRequest
 ) -> FinalResponse:
+    
+    model_provider = request["model_provider"] if "model_provider" in request else 'gemini'
+    chat_history = request["chat_history"] if "chat_history" in request else []
+    llm = LLMConfig(model_provider, chat_history)
+
     initial_state = MultiDBQueryState(
         request=request,
         db_connections={}, 
         db_schemas={}, 
-        error=[]
+        error=[],
+        llm=llm
     )
    
     final_state = await multi_db_query_app.ainvoke(initial_state)

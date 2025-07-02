@@ -6,7 +6,9 @@ from bson.decimal128 import Decimal128
 # Accepts user question
 class NLQueryRequest(BaseModel):
     question: str
-    context: Optional[str] = None
+    model_provider: Optional[str] = Field(None)
+    chat_history: Optional[List[Dict[str, str]]] = Field(None)
+
 
     model_config = ConfigDict(extra="forbid")
 
