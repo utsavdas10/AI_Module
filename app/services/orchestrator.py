@@ -486,7 +486,7 @@ async def process_natural_language_query(
     request: NLQueryRequest
 ) -> FinalResponse:
     
-    model_provider = request["model_provider"] if "model_provider" in request else 'gemini'
+    model_provider = request["model_provider"] if "model_provider" in request else settings.DEFAULT_MODEL_PROVIDER
     chat_history = request["chat_history"] if "chat_history" in request else []
     llm = LLMConfig(model_provider, chat_history)
 
