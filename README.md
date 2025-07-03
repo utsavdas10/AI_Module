@@ -25,24 +25,6 @@ This project is a modular, context-aware AI orchestration system that leverages 
 ---
 
 ## Architecture Diagram
-
-<!-- Mermaid Diagram (for GitHub and modern viewers) -->
-```mermaid
-flowchart TD
-    A[User Request] --> B[ai_compute.py (Entry Point)]
-    B --> C[Orchestrator (Workflow Engine)]
-    C --> D[LLMConfig (Model Selection & Prompting)]
-    C --> E[DB Connection & Schema Inspector]
-    C --> F[Intent Classifier]
-    F -->|General| G[General Answer Node]
-    F -->|Query/Analysis| H[Query Generator]
-    H --> I[Query Executor]
-    I --> J[Data Joiner]
-    J --> K[Summary/Insight Generator]
-    G --> L[Final Response]
-    K --> L
-```
-
 <!-- ASCII Fallback for plain Markdown viewers -->
 
 ```
