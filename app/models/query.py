@@ -16,7 +16,7 @@ class NLQueryRequest(BaseModel):
 # Final Response of the api
 class FinalResponse(BaseModel):
     success: bool
-    response_type: Literal["query_result", "analysis_result", "general_answer"] = Field(
+    response_type: Literal["query_result", "analysis_result", "general_answer", "dangerous_question"] = Field(
         "query_result",
         description="The type of response generated ('query_result', 'analysis_result', 'general_answer')."
     )

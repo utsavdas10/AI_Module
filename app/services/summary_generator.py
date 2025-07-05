@@ -20,10 +20,10 @@ class SummaryGenerator:
 
         # If the analysis is a dict, use it directly; else, return as string with a warning
         if isinstance(detailed_analysis, dict):
-            return {"detailed_analysis": detailed_analysis}
+            return detailed_analysis
         else:
             logger.warning("LLM analysis did not return structured JSON. Returning as string.")
-            return {"detailed_analysis": detailed_analysis}
+            return detailed_analysis
 
 
     # This method generates a detailed analysis of the query result using the Gemini LLM.

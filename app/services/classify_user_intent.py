@@ -20,9 +20,13 @@ async def classify_user_intent(model: LLMConfig, schemas_str, question, state):
         result = response
 
         intent = result.get("intent")
+        if intent in ["general", "dangerous"]:
+            return {"question_type": intent, "target_db_ids": []}
+
+
         db_ids = result.get("db_ids") 
 
-        if intent not in ["query", "analysis", "general"]:
+        if intent not in ["query", "analysis", "general", "dangerous"]:
             return {"error": [f"Classifier returned an unknown intent: {intent}"]}
 
         # --- VALIDATION LOGIC ---

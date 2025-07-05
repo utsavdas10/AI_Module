@@ -40,7 +40,7 @@ class MultiDBQueryState(TypedDict):
 
     # Classification
     requires_db_context: bool
-    question_type: Literal["query", "analysis", "general"]
+    question_type: Literal["query", "analysis", "general", "dangerous"]
     
     # Path for 'query'
     target_db_ids: List[str | None]  # The target databases ID for the query
@@ -127,7 +127,7 @@ async def classify_question_node(state: MultiDBQueryState) -> Dict[str, Any]:
         logger.error(f"Failed to classify question: {e}")
         raise IntentClassificationError(str(e))
 
-    logger.info(f"Classifying question intent (query vs analysis vs general...)")
+    logger.info(f"Classifying question intent (query vs analysis vs general vs dangerous...)")
 
     llm = state.get("llm")
     if not llm: raise LLMNotConfiguredError("LLM needs to be configured")
@@ -138,6 +138,14 @@ async def classify_question_node(state: MultiDBQueryState) -> Dict[str, Any]:
             raise IntentClassificationError(str(classification["error"]))
         
         intent = classification["question_type"]
+        if intent not in ['query', 'analysis']:
+            logger.info(f"Classified intent: '{intent}', thus no target databases.")
+            return {
+                "question_type": intent,
+                "target_db_ids": [],
+                "requires_db_context": False,
+            }
+
         target_db_ids = classification["target_db_ids"]
         logger.info(f"Classified intent: '{intent}', Target DBs: '{target_db_ids}'")
 
@@ -162,6 +170,36 @@ async def classify_question_node(state: MultiDBQueryState) -> Dict[str, Any]:
 
 
 
+# This node handles dangerous or security-risk questions.
+async def dangerous_question_node(state: MultiDBQueryState) -> Dict[str, Any]:
+    start_time = time.time()
+    question = state["request"].question
+    logger.warning(f"Dangerous or security-risk question detected: {question}")
+    try:
+        # Always return a safe, refusal response
+        analysis = (
+            "I'm sorry, but I cannot perform or assist with dangerous, destructive, or security-risk actions. "
+            "My access is strictly read-only and I am designed to protect your data and follow all safety protocols."
+        )
+        final_response = FinalResponse(
+            success=True,
+            response_type="dangerous_question",
+            analysis=analysis,
+            visualization={},
+            data=[],
+            table_desc={}
+        )
+        return {"final_response": final_response}
+    except Exception as e:
+        logger.error(f"Failed to handle dangerous question: {e}")
+        raise GeneralAnswerError(str(e))
+    finally:
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"dangerous_question_node took {elapsed:.2f} ms")
+
+
+
+
 # This node generates a general answer without needing database context.
 async def general_answer_node(state: MultiDBQueryState) -> Dict[str, Any]:
     start_time = time.time()
@@ -173,7 +211,14 @@ async def general_answer_node(state: MultiDBQueryState) -> Dict[str, Any]:
     
     try:
         response = await generate_general_llm_response(llm, question)
-        final_response = FinalResponse(success=True, response_type="general_answer", analysis=response)
+        final_response = FinalResponse(
+            success=True,
+            response_type="query_result",
+            analysis=response["analysis"],
+            visualization= response["visualization_hint"],
+            data=response["data"],
+            table_desc = response["table_desc"]
+        )
         return {"final_response": final_response}
     except Exception as e:
         logger.error(f"Failed to generate general answer: {e}")
@@ -344,14 +389,14 @@ async def process_query_result_node(state: MultiDBQueryState) -> Dict[str, Any]:
         summary_service = SummaryGenerator()
         summary = await summary_service.analyze(llm, question, final_data)
 
-        summary_data_len = len(summary["detailed_analysis"]["data"])
+        summary_data_len = len(summary["data"])
         logger.info(f"{summary_data_len} Final Table(s) created")
 
-        analysis = summary["detailed_analysis"]["analysis"]
-        visualization = summary["detailed_analysis"]["visualization_hint"]
-        table_desc = summary["detailed_analysis"]["table_desc"]
+        analysis = summary["analysis"]
+        visualization = summary["visualization_hint"]
+        table_desc = summary["table_desc"]
 
-        for data in summary["detailed_analysis"]["data"]:
+        for data in summary["data"]:
             final_data.append(data)
 
         state["final_data"] = final_data
@@ -395,14 +440,14 @@ async def process_analysis_result_node(state: MultiDBQueryState) -> Dict[str, An
         insight_service = InsightGenerator()
         insights = await insight_service.analyze(llm, question, final_data)
 
-        insights_data_len = len(insights["detailed_analysis"]["data"])
+        insights_data_len = len(insights["data"])
         logger.info(f"{insights_data_len} Final Table(s) created")
 
-        analysis = insights["detailed_analysis"]["analysis"]
-        visualization = insights["detailed_analysis"]["visualization_hint"]
-        table_desc = insights["detailed_analysis"]["table_desc"]
+        analysis = insights["analysis"]
+        visualization = insights["visualization_hint"]
+        table_desc = insights["table_desc"]
 
-        for data in insights["detailed_analysis"]["data"]:
+        for data in insights["data"]:
             final_data.append(data)
 
         state["final_data"] = final_data
@@ -433,10 +478,13 @@ async def process_analysis_result_node(state: MultiDBQueryState) -> Dict[str, An
 
 
 
+
 ### 3. Define Conditional Edges
 
 def should_get_db_context(state: MultiDBQueryState) -> str:
     if state.get("error"): return "error"
+    if state.get("question_type") == "dangerous":
+        return "dangerous_question"
     return "get_context" if state.get("requires_db_context") else "general_question"
 
 
@@ -468,6 +516,7 @@ def create_multi_db_query_graph():
 
     # Path-specific final processing nodes
     workflow.add_node("general_answer", general_answer_node)
+    workflow.add_node("dangerous_question", dangerous_question_node)
     workflow.add_node("process_query_result", process_query_result_node)
     workflow.add_node("process_analysis_result", process_analysis_result_node)
 
@@ -480,6 +529,7 @@ def create_multi_db_query_graph():
     workflow.add_conditional_edges("classify_question", should_get_db_context, {
         "get_context": "generate_query",
         "general_question": "general_answer",
+        "dangerous_question": "dangerous_question",
         "error": END
     })
     workflow.add_edge("general_answer", END)
