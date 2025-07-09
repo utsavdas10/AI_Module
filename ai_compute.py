@@ -1,7 +1,7 @@
 import time
 from app.models.query import NLQueryRequest, FinalResponse
 from app.models.db import DBConnectionParams
-from app.services import orchestrator
+from app.services.Database_AI import orchestrator
 from typing import List
 import asyncio
 

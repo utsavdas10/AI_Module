@@ -11,8 +11,8 @@ Your response MUST be a single, raw JSON object and nothing else. The JSON objec
 {{
   "analysis": "A short one-two line summary.",
   "data": [ /* THIS ARRAY CONTAINS ONLY NEWLY CREATED TABLES. It MUST be an empty list [] if no new tables were needed. */ ],
-  "visualization_hint": {{
-    "table_name_1": "plot/graph (name only)"
+  "visualization": {{
+    "table_name_1": {{ "chart_desc": "desc", "chart_type": "BAR", "x_axis_column": "region", "y_axis_column": "revenue_millions" }}
   }},
   "table_desc": {{
     "table_name_1": "One line desc for table"
@@ -68,10 +68,23 @@ Step 3: Generate Short Summary/ Description (analysis field)
 -Your summary, formatted as a Markdown string, must provide a description for the data.
 
 
-Step 4: Generate Comprehensive Visualization Hints (visualisation_hint field)
--Create a key-value pair in the visualisation_hint object for every table in the original INPUT DATA AND for every new table you created in the data field.
+Step 4: Generate Comprehensive Visualization Hints (visualization field)
+-For every table in the original INPUT DATA AND for every new table you created in the data field, create a key-value pair in the visualization object.
 -The key is the table_name.
--The value is a specific, actionable hint based on the table's structure (e.g., "Bar chart", "Line chart", "Pie Chart", etc) Only provide the required name and nothing else.
+-The value is an object with the following keys:
+    - "chart_desc": A short description of the chart.
+    - "chart_type": One of: PIE, BAR, SCATTER, LINE, HISTOGRAM. (Only these 5 types are allowed. Do NOT use TABLE or any other type.)
+    - "x_axis_column": The name of the column to use for the x-axis (or null if not applicable).
+    - "y_axis_column": The name of the column to use for the y-axis (or null for HISTOGRAM).
+-For HISTOGRAM, set y_axis_column to null.
+-Choose the most appropriate chart type for each table based on its structure and the user's question.
+
+-chart_type can only be of the following types:
+PIE
+BAR
+SCATTER
+LINE
+HISTOGRAM
 
 Step 5: Generate One Line short table description or title:
 -Create a key-value pair in the table_desc object for every table in the original INPUT DATA AND for every new table you created in the data field.
@@ -89,11 +102,11 @@ Correct Output (Note: data is empty):
 {{
   "analysis": "The most recent sale is of the item apple Iphone.",
   "data": [],
-  "visualization_hint": {{
-    "Recent Sales": "BAR PLOT"
+  "visualization": {{
+    "Recent Sales": {{ "chart_desc": "Bar plot of recent sales amounts", "chart_type": "BAR", "x_axis_column": "date", "y_axis_column": "amount" }}
   }},
   "table_desc": {{
-    "Recent Sales": "A table showing 5 most recent sales"
+    "Recent Sales": "5 most recent sales"
   }}
 }}
 
@@ -101,7 +114,7 @@ Correct Output (Note: data is empty):
 **Example 2: Requires Transformation Case
 User Question: "What are the total sales for each book genre?"
 Input Data: A single table named "Raw Sales Data" with 10 transactional rows.
-Correct Output (Note: data contains the NEW table, and visualisation_hint has hints for BOTH tables):
+Correct Output (Note: data contains the NEW table, and visualization has hints for BOTH tables):
 
 {{
   "analysis": "Here is the data of sales by genre given below.",
@@ -120,13 +133,13 @@ Correct Output (Note: data contains the NEW table, and visualisation_hint has hi
       "row_count": 9
     }}
   ],
-  "visualization_hint": {{
-    "Raw Sales Data": "PIE CHART",
-    "Final Data (1)": "BAR PLOT"
+  "visualization": {{
+    "Raw Sales Data": {{ "chart_desc": "Pie chart of sales by genre", "chart_type": "PIE", "x_axis_column": "genre", "y_axis_column": "total_sales" }},
+    "Final Data (1)": {{ "chart_desc": "Bar plot of total sales by genre", "chart_type": "BAR", "x_axis_column": "genre", "y_axis_column": "total_sales" }}
   }},
   "table_desc": {{
-    "Raw Sales Data": "A Table showing raw sales data",
-    "Final Data (1)": "A table showing sales by genre"
+    "Raw Sales Data": "Raw sales data",
+    "Final Data (1)": "Sales by genre"
   }}
 }}
 

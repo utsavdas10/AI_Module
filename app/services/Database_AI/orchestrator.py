@@ -5,14 +5,14 @@ import time
 from typing import TypedDict, Annotated, List, Dict, Any, Literal
 
 from app.models.query import NLQueryRequest, FinalResponse
-from app.services.db_inspector import DatabaseInspector
-from app.services.query_generator import QueryGenerator
-from app.services.query_executor import SafeQueryExecutor
-from app.services.summary_generator import SummaryGenerator
-from app.services.insight_generator import InsightGenerator
-from app.services.data_joiner import DataJoiner
-from app.services.classify_user_intent import classify_user_intent
-from app.services.general_answer import generate_general_llm_response
+from app.services.Database_AI.db_inspector import DatabaseInspector
+from app.services.Database_AI.query_generator import QueryGenerator
+from app.services.Database_AI.query_executor import SafeQueryExecutor
+from app.services.Database_AI.summary_generator import SummaryGenerator
+from app.services.Database_AI.insight_generator import InsightGenerator
+from app.services.Database_AI.data_joiner import DataJoiner
+from app.services.Database_AI.classify_user_intent import classify_user_intent
+from app.services.Database_AI.general_answer import generate_general_llm_response
 from app.utils.exceptions import ConnectionError, SchemaError, IntentClassificationError, GeneralAnswerError, QueryGenerationError, QueryExecutionError, JoinError, AnalysisError, LLMNotConfiguredError
 from app.utils.LLM_configuration import LLMConfig
 from app.db.db_connector import get_db_connection
@@ -215,7 +215,7 @@ async def general_answer_node(state: MultiDBQueryState) -> Dict[str, Any]:
             success=True,
             response_type="query_result",
             analysis=response["analysis"],
-            visualization= response["visualization_hint"],
+            visualization= response["visualization"],
             data=response["data"],
             table_desc = response["table_desc"]
         )
@@ -393,7 +393,7 @@ async def process_query_result_node(state: MultiDBQueryState) -> Dict[str, Any]:
         logger.info(f"{summary_data_len} Final Table(s) created")
 
         analysis = summary["analysis"]
-        visualization = summary["visualization_hint"]
+        visualization = summary["visualization"]
         table_desc = summary["table_desc"]
 
         for data in summary["data"]:
@@ -444,7 +444,7 @@ async def process_analysis_result_node(state: MultiDBQueryState) -> Dict[str, An
         logger.info(f"{insights_data_len} Final Table(s) created")
 
         analysis = insights["analysis"]
-        visualization = insights["visualization_hint"]
+        visualization = insights["visualization"]
         table_desc = insights["table_desc"]
 
         for data in insights["data"]:

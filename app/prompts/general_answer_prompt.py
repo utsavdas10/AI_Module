@@ -12,7 +12,8 @@ Instructions:
 - Your response MUST be a single, raw JSON object and nothing else. The JSON object must strictly adhere to the following structure:
   - analysis: A conversational answer to the user's question, written in Markdown format. This should reference or build on the chat history and any available data.
   - data: An array of tables (can be empty if not applicable).
-  - visualization_hint: An object mapping table names to visualization types (can be empty).
+  - visualization: An object mapping table names to visualization objects (can be empty). Each visualization object must have: chart_desc, chart_type, x_axis_column, y_axis_column.
+    chart_type can be one of: PIE, BAR, SCATTER, LINE, HISTOGRAM and nothing else
   - table_desc: An object mapping table names to one-line descriptions (can be empty).
 
 Here is the context you have access to:
@@ -26,7 +27,7 @@ Here is the context you have access to:
 {{
   "analysis": "...your detailed, context-aware answer in Markdown...",
   "data": [],
-  "visualization_hint": {{}},
+  "visualization": {{}},
   "table_desc": {{}}
 }}
 ```
@@ -38,7 +39,7 @@ Response:
 {{
   "analysis": "Artificial Intelligence (AI) refers to the simulation of human intelligence in machines...",
   "data": [],
-  "visualization_hint": {{}},
+  "visualization": {{}},
   "table_desc": {{}}
 }}
 
@@ -64,7 +65,7 @@ Response:
       "row_count": 9
     }}
   ],
-  "visualization_hint": {{"Sales Data": "Bar Chart"}},
+  "visualization": {{"Sales Data": {{ "chart_desc": "Bar plot of total sales by genre", "chart_type": "BAR", "x_axis_column": "genre", "y_axis_column": "total_sales" }} }},
   "table_desc": {{"Sales Data": "A table showing sales by genre"}}
 }}
 
@@ -76,7 +77,7 @@ Response:
 {{
   "analysis": "There is no data available in the chat history to visualize. Please provide or request data first.",
   "data": [],
-  "visualization_hint": {{}},
+  "visualization": {{}},
   "table_desc": {{}}
 }}
 
@@ -104,8 +105,8 @@ Response:
       "row_count": 2
     }}
   ],
-  "visualization_hint": {{"Purchase History": "Bar Chart"}},
-  "table_desc": {{"Purchase History": "A table showing your recent purchases by category"}}
+  "visualization": {{"Purchase History": {{ "chart_desc": "Bar plot of recent purchases by category", "chart_type": "BAR", "x_axis_column": "category", "y_axis_column": "amount" }} }},
+  "table_desc": {{"Purchase History": "Your recent purchases by category"}}
 }}
 
 ### Example 5: Dangerous Prompt (Security Risk)
@@ -115,7 +116,7 @@ Response:
 {{
   "analysis": "I'm sorry, but I cannot perform destructive actions such as deleting records from databases. My access is strictly read-only, and I am designed to protect your data and follow all safety protocols.",
   "data": [],
-  "visualization_hint": {{}},
+  "visualization": {{}},
   "table_desc": {{}}
 }}
 
