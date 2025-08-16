@@ -1,15 +1,20 @@
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 from typing import List, Dict, Any, Optional, Literal
 from bson.decimal128 import Decimal128
+from app.models.db import DBConnectionParams
+from app.models.chat_history import ChatHistory
+
+
+
 
 
 # Accepts user question
 class NLQueryRequest(BaseModel):
     question: str
     model_provider: Optional[str] = Field(None)
-    chat_history: Optional[List[Dict[str, str]]] = Field(None)
-
-
+    connections: List[DBConnectionParams] = []
+    chat_history: List[ChatHistory] = []
+    
     model_config = ConfigDict(extra="forbid")
 
 

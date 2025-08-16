@@ -22,7 +22,8 @@ class LLMConfig:
             logger.warning("Defaulting to gemini 2.0 flash")
 
         # Use provided history or start with an empty list
-        self.chat_history = initial_history if initial_history is not None else []
+        self.initial_history = initial_history if initial_history is not None else []
+        self.chat_history = []
         
         # Initialize the appropriate client and model
         self._client = None
@@ -31,25 +32,31 @@ class LLMConfig:
             if not api_key:
                 raise LLMNotConfiguredError("GOOGLE_API_KEY environment variable not set.")
             genai.configure(api_key=api_key)
-            self.model_name = model_name or 'gemini-2.0-flash' # A good default
+            self.model_name = model_name or 'gemini-2.0-flash'
             self._client = genai.GenerativeModel(self.model_name)
             # Start a chat session with the initial history
-            self._chat_session = self._client.start_chat(history=self._prepare_gemini_history())
+            self.chat_history = self._prepare_gemini_history()
+            self._chat_session = self._client.start_chat(history=self.chat_history) # History here may be redundant
+
 
         elif self.model_provider == 'claude':
             api_key = settings.ANTHROPIC_API_KEY
             if not api_key:
                 raise LLMNotConfiguredError("ANTHROPIC_API_KEY environment variable not set.")
-            self.model_name = model_name or 'claude-3-haiku-20240307' # A fast, cheap default
+            self.model_name = model_name or 'claude-3-haiku-20240307'
             self._client = Anthropic(api_key=api_key)
+            self.chat_history = self._prepare_history()
+
 
         elif self.model_provider == 'openai':
             api_key = settings.OPENAI_API_KEY
             if not api_key:
                 raise LLMNotConfiguredError("OPENAI_API_KEY environment variable not set.")
-            self.model_name = model_name or 'gpt-4o' # A great default
+            self.model_name = model_name or 'gpt-4o'
             self._client = OpenAI(api_key=api_key)
+            self.chat_history = self._prepare_history()
         
+        # default
         else:
             api_key = settings.GEMINI_API_KEY
             if not api_key:
@@ -65,17 +72,28 @@ class LLMConfig:
     def _prepare_gemini_history(self):
         """Converts standard history to Gemini's format ('assistant' -> 'model')."""
         gemini_history = []
-        for msg in self.chat_history:
-            role = 'model' if msg['role'] == 'assistant' else msg['role']
-            gemini_history.append({'role': role, 'parts': [msg['content']]})
+        for msg in self.initial_history:
+            role = 'model' if msg.role == 'assistant' else msg.role
+            gemini_history.append({'role': role, 'parts': [msg.content]})
+
         return gemini_history
+    
+
+    # For claude and openai
+    def _prepare_history(self):
+        history = []
+        for msg in self.initial_history:
+            history.append({'role': 'assistant', 'content': msg.content})
+            
+        return history
+    
 
 
     def generate_response(self, prompt: str) -> str:
 
         # Add user's prompt to our internal history
         self.chat_history.append({"role": "user", "content": prompt})
-        
+
         response_text = ""
         
         try:
@@ -106,6 +124,7 @@ class LLMConfig:
         except Exception as e:
             self.chat_history.pop()
             raise LLMNotConfiguredError(e)
+
 
 
     def parse_json_response(self, response_text):

@@ -561,8 +561,8 @@ async def process_natural_language_query(
     request: NLQueryRequest
 ) -> FinalResponse:
     
-    model_provider = request["model_provider"] if "model_provider" in request else 'gemini'
-    chat_history = request["chat_history"] if "chat_history" in request else []
+    model_provider = request.model_provider or 'gemini'
+    chat_history = request.chat_history or []
     llm = LLMConfig(model_provider, chat_history)
 
     initial_state = MultiDBQueryState(
