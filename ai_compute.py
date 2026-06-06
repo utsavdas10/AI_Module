@@ -58,27 +58,27 @@ async def process_query(request: NLQueryRequest):
     
 
 
-
+# Example Query
 request=NLQueryRequest(
         question = "Who owns XYZ company?y",
         connections = [
             {
                 "id": "1",
                 "db_type": "mongodb",
-                "host": "cluster0.yvyg3bm.mongodb.net",
+                "host": "cluster0.abcd.mongodb.net",
                 "port": 0,
-                "username": "utsavdas10",
-                "password": "utsavdas10",
+                "username": "username",
+                "password": "password",
                 "database": "sample_supplies",
                 "ssl_mode": "prefer",
             }
         #     {
         #         "id": "2",
         #         "db_type": "postgresql",
-        #         "host": "ep-shiny-dust-a1fynin8-pooler.ap-southeast-1.aws.neon.tech",
+        #         "host": "host",
         #         "port": 0,
         #         "username": "neondb_owner",
-        #         "password": "npg_6jzBpNGdbQ9l",
+        #         "password": "password",
         #         "database": "neondb",
         #         "ssl_mode": "prefer"
         #     },
